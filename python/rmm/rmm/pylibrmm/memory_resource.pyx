@@ -1278,7 +1278,12 @@ cdef class HostMemoryResource:
         """Get the underlying C++ host memory resource object."""
         return self.c_obj.get()
 
-    def allocate(self, size_t nbytes, object alignment=None):
+    def allocate(
+        self,
+        size_t nbytes,
+        object alignment=None,
+        Stream stream=DEFAULT_STREAM,
+    ):
         """Allocate ``nbytes`` bytes of host memory.
 
         Parameters
@@ -1288,6 +1293,13 @@ cdef class HostMemoryResource:
         alignment : size_t, optional
             The alignment of the allocation in bytes. Defaults to None (use default
             alignment).
+        stream : Stream, optional
+            CUDA stream for the allocation. Defaults to the default stream.
+
+        Notes
+        -----
+        The stream argument only exists to provide API compatibility, but it is ignored
+        since host memory resources do not use a stream.
         """
         cdef size_t c_alignment
         if alignment is None:
@@ -1296,7 +1308,13 @@ cdef class HostMemoryResource:
             c_alignment = alignment
         return <uintptr_t>self.c_obj.get().allocate(nbytes, c_alignment)
 
-    def deallocate(self, uintptr_t ptr, size_t nbytes, object alignment=None):
+    def deallocate(
+        self,
+        uintptr_t ptr,
+        size_t nbytes,
+        object alignment=None,
+        Stream stream=DEFAULT_STREAM,
+    ):
         """Deallocate host memory pointed to by ``ptr`` of size ``nbytes``.
 
         Parameters
@@ -1305,9 +1323,16 @@ cdef class HostMemoryResource:
             Pointer to be deallocated
         nbytes : size_t
             Size of the allocation in bytes
-        object alignment : size_t, optional
+        alignment : size_t, optional
             The alignment of the allocation in bytes. Defaults to None (use default
             alignment).
+        stream : Stream, optional
+            CUDA stream for the deallocation. Defaults to the default stream.
+
+        Notes
+        -----
+        The stream argument only exists to provide API compatibility, but it is ignored
+        since host memory resources do not use a stream.
         """
         cdef size_t c_alignment
         if alignment is None:
@@ -1353,13 +1378,13 @@ cdef class PinnedMemoryResource(HostMemoryResource):
         """
         pass
 
-    def allocate_async(
+    def allocate(
         self,
         size_t nbytes,
         object alignment=None,
         Stream stream=DEFAULT_STREAM,
     ):
-        """Allocate ``nbytes`` bytes of pinned host memory asynchronously.
+        """Allocate ``nbytes`` bytes of pinned host memory.
 
         Parameters
         ----------
@@ -1379,14 +1404,14 @@ cdef class PinnedMemoryResource(HostMemoryResource):
         cdef pinned_memory_resource* c_mr = <pinned_memory_resource*>self.c_obj.get()
         return <uintptr_t>c_mr.allocate_async(nbytes, c_alignment, stream.view())
 
-    def deallocate_async(
+    def deallocate(
         self,
         uintptr_t ptr,
         size_t nbytes,
         object alignment=None,
         Stream stream=DEFAULT_STREAM,
     ):
-        """Deallocate pinned host memory asynchronously.
+        """Deallocate pinned host memory.
 
         Parameters
         ----------
