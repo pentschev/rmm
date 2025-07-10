@@ -1144,3 +1144,48 @@ def test_cuda_async_view_memory_resource_custom_pool(dtype, nelem, alloc):
     assert err == runtime.cudaError_t.cudaSuccess
     with pytest.raises(MemoryError):
         array_tester(dtype, nelem, alloc)
+
+
+def test_pinned_memory_resource():
+    """Test the PinnedMemoryResource for host memory allocation."""
+    mr = rmm.mr.PinnedMemoryResource()
+
+    # Test basic allocation and deallocation
+    ptr1 = mr.allocate(1024)
+    assert ptr1 != 0
+
+    # Test allocation with alignment
+    ptr2 = mr.allocate(512, alignment=64)
+    assert ptr2 != 0
+
+    # Test deallocation
+    mr.deallocate(ptr1, 1024)
+    mr.deallocate(ptr2, 512, alignment=64)
+
+    # Test zero byte allocation
+    ptr3 = mr.allocate(0)
+    assert ptr3 == 0
+    mr.deallocate(ptr3, 0)
+
+    # Test async allocation
+    stream = rmm.pylibrmm.stream.Stream()
+    ptr4 = mr.allocate_async(256, stream=stream)
+    assert ptr4 != 0
+
+    # Test async deallocation
+    mr.deallocate_async(ptr4, 256, stream=stream)
+
+    # Test async allocation with alignment
+    ptr5 = mr.allocate_async(128, alignment=32, stream=stream)
+    assert ptr5 != 0
+    mr.deallocate_async(ptr5, 128, alignment=32, stream=stream)
+
+
+def test_host_memory_resource_base():
+    """Test the base HostMemoryResource class."""
+    mr = rmm.mr.HostMemoryResource()
+
+    # Test that we can't instantiate the base class directly
+    # This should raise an error since it's an abstract base class
+    with pytest.raises(Exception):
+        mr.allocate(1024)
