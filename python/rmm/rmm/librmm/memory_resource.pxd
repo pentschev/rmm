@@ -248,3 +248,31 @@ cdef extern from "rmm/mr/device/prefetch_resource_adaptor.hpp" \
         namespace "rmm::mr" nogil:
     cdef cppclass prefetch_resource_adaptor[Upstream](device_memory_resource):
         prefetch_resource_adaptor(Upstream* upstream_mr) except +
+
+# Host memory resources
+cdef extern from "rmm/mr/host/host_memory_resource.hpp" \
+        namespace "rmm::mr" nogil:
+    cdef cppclass host_memory_resource:
+        void* allocate(size_t bytes, size_t alignment) except +
+        void deallocate(void* ptr, size_t bytes, size_t alignment) except +
+        bint is_equal(const host_memory_resource& other) except +
+
+cdef extern from "rmm/mr/host/pinned_memory_resource.hpp" \
+        namespace "rmm::mr" nogil:
+    cdef cppclass pinned_memory_resource(host_memory_resource):
+        pinned_memory_resource() except +
+        void* allocate_async(
+            size_t bytes,
+            size_t alignment,
+            cuda_stream_view stream,
+        ) except +
+        void* allocate_async(size_t bytes, cuda_stream_view stream) except +
+        void deallocate_async(
+            void* ptr,
+            size_t bytes,
+            size_t alignment,
+            cuda_stream_view stream,
+        ) except +
+
+cdef extern from "rmm/aligned.hpp" namespace "rmm" nogil:
+    const size_t RMM_DEFAULT_HOST_ALIGNMENT

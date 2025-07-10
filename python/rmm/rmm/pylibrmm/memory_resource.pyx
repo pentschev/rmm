@@ -23,6 +23,8 @@ cimport cython
 from cython.operator cimport dereference as deref
 from libc.stddef cimport size_t
 from libc.stdint cimport int8_t, int32_t, uintptr_t
+# Import the C++ default alignment constant
+from rmm.librmm.memory_resource cimport RMM_DEFAULT_HOST_ALIGNMENT
 from libcpp cimport bool
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.optional cimport optional
@@ -62,10 +64,12 @@ from rmm.librmm.memory_resource cimport (
     failure_callback_resource_adaptor,
     failure_callback_t,
     fixed_size_memory_resource,
+    host_memory_resource,
     limiting_resource_adaptor,
     logging_resource_adaptor,
     managed_memory_resource,
     percent_of_free_device_memory as c_percent_of_free_device_memory,
+    pinned_memory_resource,
     pool_memory_resource,
     prefetch_resource_adaptor,
     sam_headroom_memory_resource,
@@ -1264,3 +1268,142 @@ def available_device_memory():
     cdef pair[size_t, size_t] res
     res = c_available_device_memory()
     return (res.first, res.second)
+
+
+# Host memory resources
+cdef class HostMemoryResource:
+    """Base class for host memory resources."""
+
+    cdef host_memory_resource* get_mr(self) noexcept nogil:
+        """Get the underlying C++ host memory resource object."""
+        return self.c_obj.get()
+
+    def allocate(self, size_t nbytes, object alignment=None):
+        """Allocate ``nbytes`` bytes of host memory.
+
+        Parameters
+        ----------
+        nbytes : size_t
+            The size of the allocation in bytes
+        alignment : size_t, optional
+            The alignment of the allocation in bytes. Defaults to None (use default
+            alignment).
+        """
+        cdef size_t c_alignment
+        if alignment is None:
+            c_alignment = RMM_DEFAULT_HOST_ALIGNMENT  # Default alignment
+        else:
+            c_alignment = alignment
+        return <uintptr_t>self.c_obj.get().allocate(nbytes, c_alignment)
+
+    def deallocate(self, uintptr_t ptr, size_t nbytes, object alignment=None):
+        """Deallocate host memory pointed to by ``ptr`` of size ``nbytes``.
+
+        Parameters
+        ----------
+        ptr : uintptr_t
+            Pointer to be deallocated
+        nbytes : size_t
+            Size of the allocation in bytes
+        object alignment : size_t, optional
+            The alignment of the allocation in bytes. Defaults to None (use default
+            alignment).
+        """
+        cdef size_t c_alignment
+        if alignment is None:
+            c_alignment = RMM_DEFAULT_HOST_ALIGNMENT  # Default alignment
+        else:
+            c_alignment = alignment
+        self.c_obj.get().deallocate(<void*>(ptr), nbytes, c_alignment)
+
+    def is_equal(self, HostMemoryResource other):
+        """Compare this resource to another.
+
+        Parameters
+        ----------
+        other : HostMemoryResource
+            The other resource to compare to
+
+        Returns
+        -------
+        bool
+            True if the two resources are equivalent
+        """
+        return self.c_obj.get().is_equal(deref(other.c_obj.get()))
+
+
+cdef class PinnedMemoryResource(HostMemoryResource):
+    """Memory resource that uses `cudaMallocHost`/`cudaFreeHost` for (de-)allocation.
+
+    This resource allocates pinned/page-locked host memory which can be used for
+    efficient host-to-device and device-to-host memory transfers.
+
+    See https://devblogs.nvidia.com/how-optimize-data-transfers-cuda-cc/
+    """
+
+    def __cinit__(self):
+        self.c_obj.reset(
+            new pinned_memory_resource()
+        )
+
+    def __init__(self):
+        """
+        Memory resource that uses ``cudaMallocHost``/``cudaFreeHost`` for
+        allocation/deallocation of pinned host memory.
+        """
+        pass
+
+    def allocate_async(
+        self,
+        size_t nbytes,
+        object alignment=None,
+        Stream stream=DEFAULT_STREAM,
+    ):
+        """Allocate ``nbytes`` bytes of pinned host memory asynchronously.
+
+        Parameters
+        ----------
+        nbytes : size_t
+            The size of the allocation in bytes
+        alignment : size_t, optional
+            The alignment of the allocation in bytes. Defaults to None (use default
+            alignment).
+        stream : Stream, optional
+            CUDA stream for the allocation. Defaults to the default stream.
+        """
+        cdef size_t c_alignment
+        if alignment is None:
+            c_alignment = RMM_DEFAULT_HOST_ALIGNMENT  # Default alignment
+        else:
+            c_alignment = alignment
+        cdef pinned_memory_resource* c_mr = <pinned_memory_resource*>self.c_obj.get()
+        return <uintptr_t>c_mr.allocate_async(nbytes, c_alignment, stream.view())
+
+    def deallocate_async(
+        self,
+        uintptr_t ptr,
+        size_t nbytes,
+        object alignment=None,
+        Stream stream=DEFAULT_STREAM,
+    ):
+        """Deallocate pinned host memory asynchronously.
+
+        Parameters
+        ----------
+        ptr : uintptr_t
+            Pointer to be deallocated
+        nbytes : size_t
+            Size of the allocation in bytes
+        alignment : size_t, optional
+            The alignment of the allocation in bytes. Defaults to None (use default
+            alignment).
+        stream : Stream, optional
+            CUDA stream for the deallocation. Defaults to the default stream.
+        """
+        cdef size_t c_alignment
+        if alignment is None:
+            c_alignment = RMM_DEFAULT_HOST_ALIGNMENT  # Default alignment
+        else:
+            c_alignment = alignment
+        cdef pinned_memory_resource* c_mr = <pinned_memory_resource*>self.c_obj.get()
+        c_mr.deallocate_async(<void*>(ptr), nbytes, c_alignment, stream.view())

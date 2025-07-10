@@ -14,7 +14,7 @@
 
 from libcpp.memory cimport shared_ptr
 
-from rmm.librmm.memory_resource cimport device_memory_resource
+from rmm.librmm.memory_resource cimport device_memory_resource, host_memory_resource
 
 
 cdef class DeviceMemoryResource:
@@ -87,3 +87,11 @@ cdef class PrefetchResourceAdaptor(UpstreamResourceAdaptor):
     pass
 
 cpdef DeviceMemoryResource get_current_device_resource()
+
+# Host memory resources
+cdef class HostMemoryResource:
+    cdef shared_ptr[host_memory_resource] c_obj
+    cdef host_memory_resource* get_mr(self) noexcept nogil
+
+cdef class PinnedMemoryResource(HostMemoryResource):
+    pass
