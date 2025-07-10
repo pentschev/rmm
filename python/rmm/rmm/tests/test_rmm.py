@@ -1167,18 +1167,18 @@ def test_pinned_memory_resource():
     assert ptr3 == 0
     mr.deallocate(ptr3, 0)
 
-    # Test async allocation
+    # Test allocation with stream
     stream = rmm.pylibrmm.stream.Stream()
-    ptr4 = mr.allocate_async(256, stream=stream)
+    ptr4 = mr.allocate(256, stream=stream)
     assert ptr4 != 0
 
-    # Test async deallocation
-    mr.deallocate_async(ptr4, 256, stream=stream)
+    # Test deallocation with stream
+    mr.deallocate(ptr4, 256, stream=stream)
 
-    # Test async allocation with alignment
-    ptr5 = mr.allocate_async(128, alignment=32, stream=stream)
+    # Test allocation with alignment and stream
+    ptr5 = mr.allocate(128, alignment=32, stream=stream)
     assert ptr5 != 0
-    mr.deallocate_async(ptr5, 128, alignment=32, stream=stream)
+    mr.deallocate(ptr5, 128, alignment=32, stream=stream)
 
 
 def test_host_memory_resource_base():
